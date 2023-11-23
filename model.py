@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import torchvision.ops
 from torch.nn.utils.weight_norm import weight_norm
 from tqdm import tqdm
+import pytorch_lightning as pl
 
 
 class DeformableConv2d(nn.Module):
@@ -122,3 +123,36 @@ class CDIL(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
+class AutoEncoder(pl.LightningModule):
+    def __init__(self, model):
+        super(AutoEncoder, self).__init__()
+        self.model = model
+
+    def forward(self, x):
+        return self.model(x)
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.model(x)
+        loss = F.mse_loss(y_hat, y)
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.model(x)
+        loss = F.mse_loss(y_hat, y)
+        self.log('val_loss', loss)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.model(x)
+        loss = F.mse_loss(y_hat, y)
+        self.log('test_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer

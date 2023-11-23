@@ -402,6 +402,7 @@ class HDF5ECGDataset(data.IterableDataset):
         MODE_ECG_WITH_ID_RANDOM: int = 4
         MODE_ECG_WITH_ID_FILL: int = 5
         MODE_GALLERY_PROBE: int = 6
+        MODE_MASKED_AUTOENCODER: int = 7
 
         @classmethod
         def __contains__(cls, item):
@@ -507,6 +508,8 @@ class HDF5ECGDataset(data.IterableDataset):
             assert worker_info is None, "Mode 'gallery/probe' doesn't support multi-worker loading."
             assert self.batch_size == 1, "Mode 'gallery/probe' does not support batch_size > 1."
             iterator = self.__generator_gallery_probe(size)
+        elif self.mode == self.Mode.MODE_MASKED_AUTOENCODER:
+            iterator = self.__generator_masked_autoencoder(size)
 
         if iterator is None:
             raise ValueError(f"Unknown mode {self.mode}.")
@@ -514,15 +517,22 @@ class HDF5ECGDataset(data.IterableDataset):
         def apply_transform(batch_element):
             is_tuple = isinstance(batch_element, tuple)
 
+            y_is_ecg = False
             if is_tuple:
                 x, y = batch_element
+                if y.shape == x.shape:
+                    y_is_ecg = True
             else:
                 x = batch_element
 
             if self.transform:
                 x = self.transform(x)
+                if y_is_ecg:
+                    y = self.transform(y)
             else:
                 x = torch.from_numpy(x)
+                if y_is_ecg:
+                    y = torch.from_numpy(y)
 
             if self.clip_length is not None:
                 x = x[..., :self.clip_length, :]
@@ -729,6 +739,22 @@ class HDF5ECGDataset(data.IterableDataset):
             S += 1
             if S == size:
                 break
+    
+    def __generator_masked_autoencoder(self, size):
+        num_individual_samples = len(self.handle) - self.batch_size
+        start_index = int(self.start_fraction * num_individual_samples)
+        end_index = int(self.end_fraction * num_individual_samples)
+        for i in range(size):
+            random_index = self.prng.integers(start_index, end_index, 1)[0]
+            y = self.handle[random_index:random_index + self.batch_size]
+            x = y.copy()
+            
+            # x shape is (batch_size, 4096, 8)
+            # we want to mask various chunks across time and 3 random leads
+            x[:, :, self.prng.choice(8, 3, replace=False)] = 0
+            x[:, self.prng.choice(4096, 1000, replace=False), :] = 0
+            
+            yield x, y
 
 
 class ECGDataModule(LightningDataModule):
@@ -846,3 +872,11 @@ class ECGDataModule(LightningDataModule):
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
         return self.make_dataloader(self.__test_dataset)
+    
+if __name__ == '__main__':
+    dh = ECGDataModule('datasets/ikem', batch_size=4, mode=HDF5ECGDataset.Mode.MODE_MASKED_AUTOENCODER)
+    dl = dh.train_dataloader()
+    for i, (x, y) in enumerate(dl):
+        print(x.shape, y.shape)
+        if i == 10:
+            break
