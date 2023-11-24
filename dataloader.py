@@ -31,12 +31,21 @@ class MultiFileHDF5ECGHandle:
     EXAM_ID_COL_NAME = 'exam_id'
     TRACINGS_COL_NAME = "tracings"
     PATIENT_COL_NAME = 'patient_id'
+    
+    HH_CLASS_A_COL_NAME = 'DischargeTo_Agg'
+
 
     def __init__(self, file_path, recursive=False, read_only=True):
         super().__init__()
 
         self.metadata_df = pd.read_csv(os.path.join(file_path, 'exams.csv'))
         self.metadata_df.set_index(self.EXAM_ID_COL_NAME, inplace=True)
+        
+        if self.HH_CLASS_A_COL_NAME in self.metadata_df.columns:
+            grouped = df.groupby(['DischargeTo_Agg', 'DischargeTo_unit_agg']).size().reset_index(name='Count')
+
+            self.metadata_df['hh_class'] = 
+        
         self.read_only = read_only
         self.path = file_path
 
@@ -393,6 +402,9 @@ class HDF5ECGDataset(data.IterableDataset):
     EXAM_ID_COL_NAME = 'exam_id'
     TRACINGS_COL_NAME = "tracings"
     PATIENT_ID_COL_NAME = 'patient_id'
+    
+    HH_CLASS_A_COL_NAME = 'DischargeTo_Agg'
+    HH_CLASS_B_COL_NAME = 'DischargeTo_unit_agg'
 
     class Mode(IntEnum):
         MODE_DEFAULT: int = 0
@@ -403,6 +415,7 @@ class HDF5ECGDataset(data.IterableDataset):
         MODE_ECG_WITH_ID_FILL: int = 5
         MODE_GALLERY_PROBE: int = 6
         MODE_MASKED_AUTOENCODER: int = 7
+        MODE_HH_CLASSIFIER_SIMPLE: int = 8
 
         @classmethod
         def __contains__(cls, item):
@@ -510,6 +523,8 @@ class HDF5ECGDataset(data.IterableDataset):
             iterator = self.__generator_gallery_probe(size)
         elif self.mode == self.Mode.MODE_MASKED_AUTOENCODER:
             iterator = self.__generator_masked_autoencoder(size)
+        elif self.mode == self.Mode.MODE_HH_CLASSIFIER_SIMPLE:
+            iterator = self.__generator_hh_classifier_simple(size)
 
         if iterator is None:
             raise ValueError(f"Unknown mode {self.mode}.")
@@ -756,6 +771,17 @@ class HDF5ECGDataset(data.IterableDataset):
                 sample[self.prng.choice(4096, 1000, replace=False), :] = 0
 
             yield x, y
+            
+    def __generator_hh_classifier_simple(self, size):
+        num_individual_samples = len(self.handle) - self.batch_size
+        start_index = int(self.start_fraction * num_individual_samples)
+        end_index = int(self.end_fraction * num_individual_samples)
+        for i in range(size):
+            random_index = self.prng.integers(start_index, end_index, 1)[0]
+            exam_ids, ecgs = self.handle[random_index:random_index + self.batch_size, self.EXAM_ID_COL_NAME, self.TRACINGS_COL_NAME]
+            corresponding_class_a = self.handle.metadata_df.loc[exam_ids][self.HH_CLASS_A_COL_NAME].tolist()
+            corresponding_class_b = self.handle.metadata_df.loc[exam_ids][self.HH_CLASS_B_COL_NAME].tolist()
+            a = 4
 
 
 class ECGDataModule(LightningDataModule):
@@ -875,7 +901,7 @@ class ECGDataModule(LightningDataModule):
         return self.make_dataloader(self.__test_dataset)
     
 if __name__ == '__main__':
-    dh = ECGDataModule('datasets/ikem', batch_size=4, mode=HDF5ECGDataset.Mode.MODE_MASKED_AUTOENCODER)
+    dh = ECGDataModule('datasets/hhmusedata', batch_size=4, mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE)
     dl = dh.train_dataloader()
     for i, (x, y) in enumerate(dl):
         print(x.shape, y.shape)

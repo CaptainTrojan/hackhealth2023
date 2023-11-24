@@ -12,6 +12,14 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": ["--smoke-test"]
+        },
+        {
+            "name": "debug current file",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }
