@@ -16,7 +16,7 @@ def train_func(config, max_epochs):
         num_layers=config['num_layers'],
         kernel_size=config['kernel_size']
     )
-    model = AutoEncoder(cdil)
+    model = AutoEncoder(cdil, lr=config['learning_rate'], wd=config['weight_decay'])
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',

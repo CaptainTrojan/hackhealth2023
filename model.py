@@ -125,10 +125,12 @@ class CDIL(nn.Module):
 
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, model):
+    def __init__(self, model, lr, wd):
         super(AutoEncoder, self).__init__()
         self.model = model
         self.loss = torch.nn.MSELoss()
+        self.lr = lr
+        self.wd = wd
 
     def forward(self, x):
         return self.model(x.transpose(1, 2)).transpose(1, 2)
@@ -155,5 +157,5 @@ class AutoEncoder(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
         return optimizer
