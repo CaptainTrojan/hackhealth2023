@@ -131,25 +131,25 @@ class AutoEncoder(pl.LightningModule):
         self.loss = torch.nn.MSELoss()
 
     def forward(self, x):
-        return self.model(x)
+        return self.model(x.transpose(1, 2)).transpose(1, 2)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.model(x)
+        y_hat = self.forward(x)
         loss = self.loss(y_hat, y)
         self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.model(x)
+        y_hat = self.forward(x)
         loss = self.loss(y_hat, y)
         self.log('val_loss', loss)
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.model(x)
+        y_hat = self.forward(x)
         loss = self.loss(y_hat, y)
         self.log('test_loss', loss)
         return loss

@@ -748,12 +748,13 @@ class HDF5ECGDataset(data.IterableDataset):
             random_index = self.prng.integers(start_index, end_index, 1)[0]
             y = self.handle[random_index:random_index + self.batch_size]
             x = y.copy()
-            
+
             # x shape is (batch_size, 4096, 8)
             # we want to mask various chunks across time and 3 random leads
-            x[:, :, self.prng.choice(8, 3, replace=False)] = 0
-            x[:, self.prng.choice(4096, 1000, replace=False), :] = 0
-            
+            for sample in x:
+                sample[:, self.prng.choice(8, 3, replace=False)] = 0
+                sample[self.prng.choice(4096, 1000, replace=False), :] = 0
+
             yield x, y
 
 
