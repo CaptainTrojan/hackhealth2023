@@ -4,24 +4,30 @@ import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import EarlyStopping
+from resnet_model import ResNet
 
 
 def train_func(config, max_epochs, num_samples):
     dm = ECGDataModule('datasets/hhmusedata', batch_size=config['batch_size'], mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE,
                        num_workers=7, sample_size=num_samples)
-    cdil = CDIL(
-        input_channels=12,
-        hidden_channels=config['hidden_channels'],
-        output_channels=config['output_channels'],
-        num_layers=config['num_layers'],
-        kernel_size=config['kernel_size']
-    )
-    model = Predictor(cdil, config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'])
+    
+    if config['model'] == 'cdil':
+        core = CDIL(
+            input_channels=12,
+            hidden_channels=config['hidden_channels'],
+            output_channels=config['output_channels'],
+            num_layers=config['num_layers'],
+            kernel_size=config['kernel_size']
+        )
+    elif config['model'] == 'resnet':
+        core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'])
+
+    model = Predictor(core, config['model'], config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'])
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_accuracy',
         dirpath='checkpoints/',
-        filename='cdil-{epoch:02d}-hc' + str(config['hidden_channels']) + '-nl' + str(config['num_layers']) + '-oc' + str(config['output_channels']) +'-{val_accuracy:.2f}',
+        filename=str(config['model']) + '-{epoch:02d}-hc' + str(config['hidden_channels']) + '-nl' + str(config['num_layers']) + '-oc' + str(config['output_channels']) +'-{val_accuracy:.2f}',
         save_top_k=1,
         mode='max',
     )
@@ -50,6 +56,7 @@ if __name__ == '__main__':
     parser.add_argument("--smoke-test", action="store_true")
     
     # add search_space parameters
+    parser.add_argument("--model", type=str, required=True, choices=['cdil', 'resnet'], help='model to use')
     parser.add_argument("--hidden_channels", type=int, default=64)
     parser.add_argument("--output_channels", type=int, default=64)
     parser.add_argument("--num_layers", type=int, default=12)
@@ -70,6 +77,7 @@ if __name__ == '__main__':
         batch_size = args.batch_size
     
     search_space = {
+        "model": args.model, # "cdil" or "resnet
         "hidden_channels": args.hidden_channels,
         "output_channels": args.output_channels,
         "num_layers": args.num_layers,

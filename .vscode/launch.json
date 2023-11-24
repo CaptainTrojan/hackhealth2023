@@ -14,13 +14,22 @@
             "args": ["--smoke-test"]
         },
         {
-            "name": "smoke test predictor",
+            "name": "smoke test predictor cdil",
             "type": "python",
             "request": "launch",
             "program": "main_predictor.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--smoke-test"]
+            "args": ["--smoke-test", "--model", "cdil"]
+        },
+        {
+            "name": "smoke test predictor resnet",
+            "type": "python",
+            "request": "launch",
+            "program": "main_predictor.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["--smoke-test", "--model", "resnet"]
         },
         {
             "name": "debug current file",

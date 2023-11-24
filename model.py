@@ -167,8 +167,9 @@ class AutoEncoder(pl.LightningModule):
     
     
 class Predictor(pl.LightningModule):
-    def __init__(self, model, channels, lr, wd, dropout=0.0):
+    def __init__(self, model, model_type, channels, lr, wd, dropout=0.0):
         super(Predictor, self).__init__()
+        self.model_type = model_type
         self.model = model
         self.MLPhead = nn.Sequential(
             nn.Dropout(dropout),
@@ -185,8 +186,11 @@ class Predictor(pl.LightningModule):
         self.wd = wd
 
     def forward(self, x):
-        cdil_out = self.model(x.transpose(1, 2)).transpose(1, 2)
-        pooled = torch.mean(cdil_out, dim=1)
+        if self.model_type == 'cdil':
+            model_out = self.model(x.transpose(1, 2)).transpose(1, 2)
+            pooled = torch.mean(model_out, dim=1)
+        elif self.model_type == 'resnet':
+            pooled = self.model(x.transpose(1, 2))
         output = self.MLPhead(pooled)
         return output
 
