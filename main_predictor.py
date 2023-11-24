@@ -23,7 +23,7 @@ def train_func(config, max_epochs, num_samples):
     elif config['model'] == 'resnet':
         core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'], dropout=config['dropout'])
     elif config['model'] == 'tsai01':
-        core = TSPerceiver(c_in=12, c_out=config['output_channels'], seq_len=4096)
+        core = TSPerceiver(c_in=12, c_out=config['output_channels'], seq_len=4096, attn_dropout=config['dropout'], fc_dropout=config['dropout'])
 
     model = Predictor(core, config['model'], config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'], dropout=config['dropout'])
 
