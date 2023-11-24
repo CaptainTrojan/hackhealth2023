@@ -32,6 +32,15 @@
             "args": ["--smoke-test", "--model", "resnet"]
         },
         {
+            "name": "smoke test predictor tsai01",
+            "type": "python",
+            "request": "launch",
+            "program": "main_predictor.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": ["--smoke-test", "--model", "tsai01"]
+        },
+        {
             "name": "debug current file",
             "type": "python",
             "request": "launch",

@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import EarlyStopping
 from resnet_model import ResNet
+from tsai.models.TSPerceiver import TSPerceiver
 
 
 def train_func(config, max_epochs, num_samples):
@@ -21,6 +22,8 @@ def train_func(config, max_epochs, num_samples):
         )
     elif config['model'] == 'resnet':
         core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'], dropout=config['dropout'])
+    elif config['model'] == 'tsai01':
+        core = TSPerceiver(c_in=12, c_out=config['output_channels'], seq_len=4096)
 
     model = Predictor(core, config['model'], config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'], dropout=config['dropout'])
 
@@ -56,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--smoke-test", action="store_true")
     
     # add search_space parameters
-    parser.add_argument("--model", type=str, required=True, choices=['cdil', 'resnet'], help='model to use')
+    parser.add_argument("--model", type=str, required=True, choices=['cdil', 'resnet', 'tsai01'], help='model to use')
     parser.add_argument("--hidden_channels", type=int, default=64)
     parser.add_argument("--output_channels", type=int, default=64)
     parser.add_argument("--num_layers", type=int, default=12)

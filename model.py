@@ -191,6 +191,8 @@ class Predictor(pl.LightningModule):
             pooled = torch.mean(model_out, dim=1)
         elif self.model_type == 'resnet':
             pooled = self.model(x.transpose(1, 2))
+        elif self.model_type == 'tsai01':
+            pooled = self.model(x.transpose(1, 2))
         output = self.MLPhead(pooled)
         return output
 
