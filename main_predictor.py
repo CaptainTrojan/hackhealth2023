@@ -21,7 +21,7 @@ def train_func(config, max_epochs, num_samples):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_accuracy',
         dirpath='checkpoints/',
-        filename='cdil-{epoch:02d}-hc' + str(config['hidden_channels']) + '-nl' + str(config['num_layers']) + '-oc' + str(config['output_channels']) +'-{val_acc:.2f}',
+        filename='cdil-{epoch:02d}-hc' + str(config['hidden_channels']) + '-nl' + str(config['num_layers']) + '-oc' + str(config['output_channels']) +'-{val_accuracy:.2f}',
         save_top_k=1,
         mode='max',
     )
