@@ -33,7 +33,7 @@ def train_func(config, max_epochs, num_samples):
     )
     wandb_logger = WandbLogger(project='hackhealth2023-predictor', config=config)
     early_stop_callback = EarlyStopping(
-        monitor='train_accuracy',
+        monitor='val_accuracy',
         min_delta=0.00,
         patience=10,
         verbose=False,
