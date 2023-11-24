@@ -1,0 +1,5 @@
+musedata/
+wandb/
+__pycache__/
+*.pyc
+*.xml
