@@ -177,13 +177,13 @@ class Preprocessing(nn.Module):
 
 class ResidualUnit(nn.Module):
     def __init__(self, n_samples_out, n_filters_out, n_samples_in, n_filters_in, kernel_initializer='he_normal',
-                 dropout_keep_prob=0.8, kernel_size=17, preactivation=True,
+                 dropout=0.2, kernel_size=17, preactivation=True,
                  postactivation_bn=False, activation_function='gelu'):
         super(ResidualUnit, self).__init__()
         self.n_samples_out = n_samples_out
         self.n_filters_out = n_filters_out
         self.kernel_initializer = kernel_initializer
-        self.dropout_rate = 1 - dropout_keep_prob
+        self.dropout_rate = dropout
         self.kernel_size = kernel_size
         self.preactivation = preactivation
         self.postactivation_bn = postactivation_bn
@@ -241,7 +241,7 @@ class ResidualUnit(nn.Module):
 
 class ResNet(nn.Module):
     def __init__(self, normalize=False, propagate_normalization=False, remove_baseline=False, remove_hf_noise=False,
-                 embedding_size=256):
+                 embedding_size=256, dropout=0.2):
         super().__init__()
         self.preprocessing = Preprocessing(normalize, remove_baseline, remove_hf_noise, result_only=True)
 
@@ -255,16 +255,20 @@ class ResNet(nn.Module):
             nn.BatchNorm1d(12),
             nn.GELU())
 
-        self.layer1 = ResidualUnit(1024, 128, n_filters_in=12, n_samples_in=4096, kernel_size=kernel_size)
-        self.layer2 = ResidualUnit(256, 196, n_filters_in=128, n_samples_in=1024, kernel_size=kernel_size)
-        self.layer3 = ResidualUnit(64, 256, n_filters_in=196, n_samples_in=256, kernel_size=kernel_size)
-        self.layer4 = ResidualUnit(16, 320, n_filters_in=256, n_samples_in=64, kernel_size=kernel_size)
+        self.layer1 = ResidualUnit(1024, 128, n_filters_in=12, n_samples_in=4096, kernel_size=kernel_size, dropout=dropout)
+        self.layer2 = ResidualUnit(256, 196, n_filters_in=128, n_samples_in=1024, kernel_size=kernel_size, dropout=dropout)
+        self.layer3 = ResidualUnit(64, 256, n_filters_in=196, n_samples_in=256, kernel_size=kernel_size, dropout=dropout)
+        self.layer4 = ResidualUnit(16, 320, n_filters_in=256, n_samples_in=64, kernel_size=kernel_size, dropout=dropout)
         self.flattening = nn.Flatten(start_dim=1, end_dim=2)
-        self.dense = nn.Sequential(torch.nn.Linear(5120 + (12 * 2 if propagate_normalization else 0), 512),
-                                   nn.GELU(),
-                                   torch.nn.Linear(512, embedding_size),
-                                   nn.GELU(),
-                                   torch.nn.Linear(embedding_size, embedding_size))
+        self.dense = nn.Sequential(
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(5120 + (12 * 2 if propagate_normalization else 0), 512),
+            nn.GELU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(512, embedding_size),
+            nn.GELU(),
+            torch.nn.Linear(embedding_size, embedding_size)
+        )
 
     def forward(self, x):
         x = self.preprocessing(x)

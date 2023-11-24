@@ -174,10 +174,10 @@ class Predictor(pl.LightningModule):
         self.MLPhead = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(channels, channels//2),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(channels//2, channels//4),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(channels//4, 3)
         )
         self.loss = torch.nn.CrossEntropyLoss()

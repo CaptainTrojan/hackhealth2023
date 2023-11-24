@@ -20,9 +20,9 @@ def train_func(config, max_epochs, num_samples):
             kernel_size=config['kernel_size']
         )
     elif config['model'] == 'resnet':
-        core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'])
+        core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'], dropout=config['dropout'])
 
-    model = Predictor(core, config['model'], config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'])
+    model = Predictor(core, config['model'], config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'], dropout=config['dropout'])
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_accuracy',
@@ -64,6 +64,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0)
+    parser.add_argument("--dropout", type=float, default=0.2)
     
     args = parser.parse_args()
     
@@ -85,5 +86,6 @@ if __name__ == '__main__':
         "batch_size": batch_size,
         "learning_rate": args.learning_rate,
         "weight_decay": args.weight_decay,
+        "dropout": args.dropout,
     }
     train_func(search_space, max_epochs, num_samples)
