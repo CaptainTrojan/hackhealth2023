@@ -5,10 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "smoke test",
+            "name": "smoke test autoencoder",
             "type": "python",
             "request": "launch",
-            "program": "main.py",
+            "program": "main_autoencoder.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["--smoke-test"]
+        },
+        {
+            "name": "smoke test predictor",
+            "type": "python",
+            "request": "launch",
+            "program": "main_predictor.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": ["--smoke-test"]

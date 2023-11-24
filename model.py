@@ -9,6 +9,7 @@ import torchvision.ops
 from torch.nn.utils.weight_norm import weight_norm
 from tqdm import tqdm
 import pytorch_lightning as pl
+import torchmetrics
 
 
 class DeformableConv2d(nn.Module):
@@ -121,6 +122,10 @@ class CDIL(nn.Module):
         self.conv = ConvPart('dict-cdil', channels, kernel_size)
 
     def forward(self, x):
+        for elem in x:
+            std, mean = torch.std_mean(elem, dim=-1, keepdim=True)
+            elem[:] = torch.nan_to_num((elem - mean) / std)
+
         return self.conv(x)
 
 
@@ -162,14 +167,59 @@ class AutoEncoder(pl.LightningModule):
     
     
 class Predictor(pl.LightningModule):
-    def __init__(self, model):
+    def __init__(self, model, channels, lr, wd, dropout=0.0):
         super(Predictor, self).__init__()
         self.model = model
+        self.MLPhead = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(channels, channels//2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(channels//2, channels//4),
+            nn.ReLU(),
+            nn.Linear(channels//4, 3)
+        )
+        self.loss = torch.nn.CrossEntropyLoss()
+        self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=3)
+        self.lr = lr
+        self.wd = wd
 
     def forward(self, x):
-        return self.model(x.transpose(1, 2)).transpose(1, 2)
+        cdil_out = self.model(x.transpose(1, 2)).transpose(1, 2)
+        pooled = torch.mean(cdil_out, dim=1)
+        output = self.MLPhead(pooled)
+        return output
 
-    def predict_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.forward(x)
-        return y_hat
+        loss = self.loss(y_hat, y)
+        preds = torch.argmax(y_hat, dim=1)
+        acc = self.accuracy(preds, y)
+        self.log('train_loss', loss)
+        self.log('train_accuracy', acc)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.forward(x)
+        loss = self.loss(y_hat, y)
+        preds = torch.argmax(y_hat, dim=1)
+        acc = self.accuracy(preds, y)
+        self.log('val_loss', loss)
+        self.log('val_accuracy', acc)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.forward(x)
+        loss = self.loss(y_hat, y)
+        preds = torch.argmax(y_hat, dim=1)
+        acc = self.accuracy(preds, y)
+        self.log('test_loss', loss)
+        self.log('test_accuracy', acc)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
+        return optimizer
