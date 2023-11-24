@@ -118,7 +118,7 @@ class CDIL(nn.Module):
         channels[0] = input_channels
         channels[-1] = output_channels
 
-        self.conv = ConvPart('dict-cdil', channels, kernel_size, True, True)
+        self.conv = ConvPart('dict-cdil', channels, kernel_size)
 
     def forward(self, x):
         return self.conv(x)
@@ -128,6 +128,7 @@ class AutoEncoder(pl.LightningModule):
     def __init__(self, model):
         super(AutoEncoder, self).__init__()
         self.model = model
+        self.loss = torch.nn.MSELoss()
 
     def forward(self, x):
         return self.model(x)
@@ -135,21 +136,21 @@ class AutoEncoder(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
-        loss = F.mse_loss(y_hat, y)
+        loss = self.loss(y_hat, y)
         self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
-        loss = F.mse_loss(y_hat, y)
+        loss = self.loss(y_hat, y)
         self.log('val_loss', loss)
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
-        loss = F.mse_loss(y_hat, y)
+        loss = self.loss(y_hat, y)
         self.log('test_loss', loss)
         return loss
 
