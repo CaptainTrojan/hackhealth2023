@@ -42,14 +42,14 @@ class MultiFileHDF5ECGHandle:
         
         if self.HH_CLASS_A_COL_NAME in self.metadata_df.columns:
             self.metadata_df['DischargeTo_Agg'] = self.metadata_df['DischargeTo_Agg'].fillna('Unknown')
-            self.metadata_df['DischargeTo_unit_agg'] = self.metadata_df['DischargeTo_unit_agg'].fillna('Unknown')
+            # self.metadata_df['DischargeTo_unit_agg'] = self.metadata_df['DischargeTo_unit_agg'].fillna('Unknown')
             
-            grouped = self.metadata_df.groupby(['DischargeTo_Agg', 'DischargeTo_unit_agg']).size().reset_index(name='Count')
+            grouped = self.metadata_df.groupby(['DischargeTo_Agg']).size().reset_index(name='Count')
             grouped.reset_index(inplace=True)
             grouped.rename(columns={'index': 'hh_class'}, inplace=True)
             
-            self.metadata_df = pd.merge(self.metadata_df, grouped[['DischargeTo_Agg', 'DischargeTo_unit_agg', 'hh_class']], 
-              on=['DischargeTo_Agg', 'DischargeTo_unit_agg'], 
+            self.metadata_df = pd.merge(self.metadata_df, grouped[['DischargeTo_Agg', 'hh_class']], 
+              on=['DischargeTo_Agg'], 
               how='left')
             
         self.metadata_df.set_index(self.EXAM_ID_COL_NAME, inplace=True)
@@ -803,7 +803,7 @@ class HDF5ECGDataset(data.IterableDataset):
             yield x, y
             
     def __generator_hh_classifier_simple(self, size):
-        forbidden_classes = [3]
+        forbidden_classes = [1]
         
         for i in range(size):
             num_classes = len(self.hh_class_index) - len(forbidden_classes)
@@ -825,6 +825,8 @@ class HDF5ECGDataset(data.IterableDataset):
                 # Add the chosen samples to the batch
                 batch.extend(self.handle[chosen_indices])
                 
+                if class_label > forbidden_classes[0]:
+                    class_label -= 1
                 # Add the corresponding labels to the labels list
                 labels.extend([class_label] * samples_per_class)
 
@@ -833,7 +835,8 @@ class HDF5ECGDataset(data.IterableDataset):
             if len(batch) < self.batch_size:
                 chosen_classes = self.prng.choice(
                     list(i for i in self.hh_class_index.keys() if i not in forbidden_classes),
-                    self.batch_size - len(batch)
+                    self.batch_size - len(batch),
+                    replace=False
                 )
                 
                 # Sample equally from each class
@@ -846,6 +849,8 @@ class HDF5ECGDataset(data.IterableDataset):
                     # Add the chosen samples to the batch
                     batch.extend(self.handle[chosen_index])
                     
+                    if class_label > forbidden_classes[0]:
+                        class_label -= 1
                     # Add the corresponding labels to the labels list
                     labels.append(class_label)
             

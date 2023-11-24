@@ -159,3 +159,17 @@ class AutoEncoder(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
         return optimizer
+    
+    
+class Predictor(pl.LightningModule):
+    def __init__(self, model):
+        super(Predictor, self).__init__()
+        self.model = model
+
+    def forward(self, x):
+        return self.model(x.transpose(1, 2)).transpose(1, 2)
+
+    def predict_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.forward(x)
+        return y_hat
