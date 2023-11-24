@@ -39,12 +39,20 @@ class MultiFileHDF5ECGHandle:
         super().__init__()
 
         self.metadata_df = pd.read_csv(os.path.join(file_path, 'exams.csv'))
-        self.metadata_df.set_index(self.EXAM_ID_COL_NAME, inplace=True)
         
         if self.HH_CLASS_A_COL_NAME in self.metadata_df.columns:
-            grouped = df.groupby(['DischargeTo_Agg', 'DischargeTo_unit_agg']).size().reset_index(name='Count')
-
-            self.metadata_df['hh_class'] = 
+            self.metadata_df['DischargeTo_Agg'] = self.metadata_df['DischargeTo_Agg'].fillna('Unknown')
+            self.metadata_df['DischargeTo_unit_agg'] = self.metadata_df['DischargeTo_unit_agg'].fillna('Unknown')
+            
+            grouped = self.metadata_df.groupby(['DischargeTo_Agg', 'DischargeTo_unit_agg']).size().reset_index(name='Count')
+            grouped.reset_index(inplace=True)
+            grouped.rename(columns={'index': 'hh_class'}, inplace=True)
+            
+            self.metadata_df = pd.merge(self.metadata_df, grouped[['DischargeTo_Agg', 'DischargeTo_unit_agg', 'hh_class']], 
+              on=['DischargeTo_Agg', 'DischargeTo_unit_agg'], 
+              how='left')
+            
+        self.metadata_df.set_index(self.EXAM_ID_COL_NAME, inplace=True)
         
         self.read_only = read_only
         self.path = file_path
@@ -405,6 +413,7 @@ class HDF5ECGDataset(data.IterableDataset):
     
     HH_CLASS_A_COL_NAME = 'DischargeTo_Agg'
     HH_CLASS_B_COL_NAME = 'DischargeTo_unit_agg'
+    HH_CLASS_COL_NAME = 'hh_class'
 
     class Mode(IntEnum):
         MODE_DEFAULT: int = 0
@@ -448,6 +457,10 @@ class HDF5ECGDataset(data.IterableDataset):
 
     def lazy_init(self):
         self.patient_groups = self._build_patient_groups()
+        
+        if self.HH_CLASS_COL_NAME in self.handle.metadata_df.columns:
+            self.hh_class_index = self._build_hh_class_inverted_index()
+        
         self.indices_of_patients_with_more_than_one_sample = np.array([i for i in range(len(self.patient_groups)) if
                                                                        len(self.patient_groups[i]) > 1])
 
@@ -476,6 +489,23 @@ class HDF5ECGDataset(data.IterableDataset):
                     ret.append([position])
                 else:
                     ret[patient_id_to_position_in_index[pid]].append(position)
+        return ret
+    
+    def _build_hh_class_inverted_index(self):
+        num_individual_samples = len(self.handle)
+        start_index = int(self.start_fraction * num_individual_samples)
+        end_index = int(self.end_fraction * num_individual_samples)
+
+        ret = {}
+        chunk_size = 1000
+        for start_idx in range(start_index, end_index, chunk_size):
+            chunk_of_exam_ids = self.handle[start_idx:min(start_idx + chunk_size, end_index), self.EXAM_ID_COL_NAME]
+            corresponding_hh_classes = self.handle.metadata_df.loc[chunk_of_exam_ids][self.HH_CLASS_COL_NAME]
+            for position, hh_class in zip(range(start_idx, start_idx + chunk_size), corresponding_hh_classes):
+                if hh_class not in ret:
+                    ret[hh_class] = [position]
+                else:
+                    ret[hh_class].append(position)
         return ret
 
     def __len__(self):
@@ -773,15 +803,56 @@ class HDF5ECGDataset(data.IterableDataset):
             yield x, y
             
     def __generator_hh_classifier_simple(self, size):
-        num_individual_samples = len(self.handle) - self.batch_size
-        start_index = int(self.start_fraction * num_individual_samples)
-        end_index = int(self.end_fraction * num_individual_samples)
+        forbidden_classes = [3]
+        
         for i in range(size):
-            random_index = self.prng.integers(start_index, end_index, 1)[0]
-            exam_ids, ecgs = self.handle[random_index:random_index + self.batch_size, self.EXAM_ID_COL_NAME, self.TRACINGS_COL_NAME]
-            corresponding_class_a = self.handle.metadata_df.loc[exam_ids][self.HH_CLASS_A_COL_NAME].tolist()
-            corresponding_class_b = self.handle.metadata_df.loc[exam_ids][self.HH_CLASS_B_COL_NAME].tolist()
-            a = 4
+            num_classes = len(self.hh_class_index) - len(forbidden_classes)
+
+            # Number of samples per class in each batch
+            samples_per_class = self.batch_size // num_classes
+
+            # Initialize empty lists to hold the batch data and labels
+            batch = []
+            labels = []
+
+            # Sample equally from each class
+            for class_label, class_indices in self.hh_class_index.items():
+                if class_label in forbidden_classes:
+                    continue
+                # Randomly choose samples from this class
+                chosen_indices = self.prng.choice(class_indices, samples_per_class)
+                
+                # Add the chosen samples to the batch
+                batch.extend(self.handle[chosen_indices])
+                
+                # Add the corresponding labels to the labels list
+                labels.extend([class_label] * samples_per_class)
+
+            # If the batch size is not a multiple of the number of classes, 
+            # randomly choose extra samples from all classes to fill the batch
+            if len(batch) < self.batch_size:
+                chosen_classes = self.prng.choice(
+                    list(i for i in self.hh_class_index.keys() if i not in forbidden_classes),
+                    self.batch_size - len(batch)
+                )
+                
+                # Sample equally from each class
+                for class_label in chosen_classes:
+                    class_indices = self.hh_class_index[class_label]
+                    
+                    # Randomly choose samples from this class
+                    chosen_index = self.prng.choice(class_indices, 1)
+                    
+                    # Add the chosen samples to the batch
+                    batch.extend(self.handle[chosen_index])
+                    
+                    # Add the corresponding labels to the labels list
+                    labels.append(class_label)
+            
+            batch = np.array(batch)
+            labels = np.array(labels)
+            
+            yield batch, labels
 
 
 class ECGDataModule(LightningDataModule):
@@ -901,7 +972,10 @@ class ECGDataModule(LightningDataModule):
         return self.make_dataloader(self.__test_dataset)
     
 if __name__ == '__main__':
-    dh = ECGDataModule('datasets/hhmusedata', batch_size=4, mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE)
+    dh = ECGDataModule('datasets/hhmusedata', batch_size=32, mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE,
+                       train_fraction=1.0,
+                       dev_fraction=0.0,
+                       test_fraction=0.0,)
     dl = dh.train_dataloader()
     for i, (x, y) in enumerate(dl):
         print(x.shape, y.shape)
