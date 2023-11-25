@@ -426,6 +426,7 @@ class HDF5ECGDataset(data.IterableDataset):
         MODE_GALLERY_PROBE: int = 6
         MODE_MASKED_AUTOENCODER: int = 7
         MODE_HH_CLASSIFIER_SIMPLE: int = 8
+        MODE_HH_TRIPLETS: int = 9
 
         @classmethod
         def __contains__(cls, item):
@@ -558,6 +559,9 @@ class HDF5ECGDataset(data.IterableDataset):
         elif self.mode == self.Mode.MODE_HH_CLASSIFIER_SIMPLE:
             iterator = self.__generator_hh_classifier_simple(size)
 
+        elif self.mode == self.Mode.MODE_HH_TRIPLETS:
+            iterator = self.__generator_hh_triplets(size)
+
         if iterator is None:
             raise ValueError(f"Unknown mode {self.mode}.")
         
@@ -583,21 +587,19 @@ class HDF5ECGDataset(data.IterableDataset):
             if isinstance(batch_element, tuple):
                 x, y = batch_element
                 if isinstance(x, dict):
-                    orig_shape = x['ecg'].shape
-                    x['ecg'] = apply_transform_ecg(x['ecg'])
+                    # Apply transform to each ECG in the triplet
+                    x['ecg'] = torch.stack([apply_transform_ecg(ecg) for ecg in x['ecg']])
                 else:
-                    orig_shape = x.shape
+                    # If x is not a dict, apply transform directly
                     x = apply_transform_ecg(x)
-                    
-                if y.shape == orig_shape:
-                    y = apply_transform_ecg(y)
                 return x, y
             else:
-                if isinstance(x, dict):
-                    x['ecg'] = apply_transform_ecg(x['ecg'])
+                # If batch_element is not a tuple, assume it's just x
+                if isinstance(batch_element, dict):
+                    batch_element['ecg'] = torch.stack([apply_transform_ecg(ecg) for ecg in batch_element['ecg']])
                 else:
-                    x = apply_transform_ecg(x)
-                return x
+                    batch_element = apply_transform_ecg(batch_element)
+                return batch_element
                 
         return map(apply_transform, iterator)
 
@@ -621,6 +623,34 @@ class HDF5ECGDataset(data.IterableDataset):
             batch = self.handle[random_indices]
 
             yield batch
+
+    def __generator_hh_triplets(self, size):
+        forbidden_classes = [1]
+
+        for _ in range(size):
+            # Initialize empty lists to hold the batch data and labels
+            batch = []
+            labels = []
+
+            for _ in range(self.batch_size):
+                # Select a class for the positive pair
+                pos_class = self.prng.choice(list(i for i in self.hh_class_index.keys() if i not in forbidden_classes))
+                pos_indices, _ = zip(*self.prng.choice(self.hh_class_index[pos_class], 2, replace=False))
+
+                # Select a different class for the negative sample
+                neg_classes = [c for c in self.hh_class_index.keys() if c != pos_class and c not in forbidden_classes]
+                neg_class = self.prng.choice(neg_classes)
+                neg_index, _ = self.prng.choice(self.hh_class_index[neg_class], 1)[0]
+
+                # Construct the triplet sample (2 positives, 1 negative)
+                triplet_sample = self.handle[list(pos_indices) + [neg_index]]
+                batch.append(triplet_sample)
+                labels.append([pos_class, pos_class, neg_class])
+
+            batch = np.array(batch)
+            labels = np.array(labels)
+
+            yield {'ecg': batch, 'labels': labels}
 
     def __generator_pairs(self, size):
         # print("init...")

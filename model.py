@@ -237,3 +237,45 @@ class Predictor(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
         return optimizer
+
+
+class TripletPredictor(pl.LightningModule):
+    def __init__(self, model, lr, wd):
+        super(TripletPredictor, self).__init__()
+        self.model = model
+        self.loss = torch.nn.TripletMarginLoss(margin=1.0, p=2)
+        self.lr = lr
+        self.wd = wd
+
+    def forward(self, batch):
+        # Extract anchor, positive, and negative samples from the batch
+        anchor, positive, negative = batch['ecg'][:, 0], batch['ecg'][:, 1], batch['ecg'][:, 2]
+        anchor_out = self.model(anchor.transpose(1, 2))
+        positive_out = self.model(positive.transpose(1, 2))
+        negative_out = self.model(negative.transpose(1, 2))
+        return anchor_out, positive_out, negative_out
+
+    def training_step(self, batch, batch_idx):
+        x = batch
+        anchor_out, positive_out, negative_out = self.forward(x)
+        loss = self.loss(anchor_out, positive_out, negative_out)
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x = batch
+        anchor_out, positive_out, negative_out = self.forward(x)
+        loss = self.loss(anchor_out, positive_out, negative_out)
+        self.log('val_loss', loss)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x = batch
+        anchor_out, positive_out, negative_out = self.forward(x)
+        loss = self.loss(anchor_out, positive_out, negative_out)
+        self.log('test_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
+        return optimizer
