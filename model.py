@@ -168,23 +168,38 @@ class AutoEncoder(pl.LightningModule):
     
     
 class Predictor(pl.LightningModule):
-    def __init__(self, model, model_type, channels, lr, wd, dropout=0.0):
+    def __init__(self, model, config):
         super(Predictor, self).__init__()
-        self.model_type = model_type
+        self.model_type = config['model']
         self.model = model
+        channels = config['output_channels']
+        dropout = config['dropout']
+        self.ignore_ecg = config['ignore_ecg']
+        self.added_features = config['added_features']
+        self.added_features_onehot = config['added_features_onehot']
+        
+        size = 0
+        if not self.ignore_ecg:
+            size += channels
+        if config['added_features']:
+            size += 3 + 10 # (reason must be one-hot encoded)
+        if config['added_features_onehot']:
+            size += 30
+        
         self.MLPhead = nn.Sequential(
             # nn.Dropout(dropout),
-            nn.Linear(channels + 93, channels//2),
+            nn.Linear(size, size//2),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(channels//2, channels//4),
+            nn.Linear(size//2, size//4),
             nn.GELU(),
-            nn.Linear(channels//4, 3)
+            nn.Linear(size//4, 3), 
         )
         self.loss = torch.nn.CrossEntropyLoss()
         self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=3)
-        self.lr = lr
-        self.wd = wd
+        self.lr = config['learning_rate']
+        self.wd = config['weight_decay']
+        self.ignore_ecg = config['ignore_ecg']
         
     @staticmethod
     def float_to_one_hot(x: ndarray, min_value, max_value, num_classes):
@@ -199,24 +214,40 @@ class Predictor(pl.LightningModule):
         reasons = batch['visit_reasons']
         reasons_vec = one_hot(reasons, num_classes=10) # 10
         age = batch['ages'] # 1
-        age_vec = self.float_to_one_hot(age, 0, 120, 40) # 40
+        age_vec = self.float_to_one_hot(age, 18, 90, 10) # 10
         atrial_rate = batch['atrial_rates'] # 1
-        atrial_rate_vec = self.float_to_one_hot(atrial_rate, 0, 200, 20) # 20
+        atrial_rate_vec = self.float_to_one_hot(atrial_rate, 40, 180, 10) # 10
         ventricular_rate = batch['ventricular_rates'] # 1
-        ventricular_rate_vec = self.float_to_one_hot(ventricular_rate, 0, 200, 20) # 20
-        # total = 93
+        ventricular_rate_vec = self.float_to_one_hot(ventricular_rate, 40, 180, 10) # 10
         
-        if self.model_type == 'cdil':
-            model_out = self.model(x.transpose(1, 2)).transpose(1, 2)
-            pooled = torch.mean(model_out, dim=1)
-        elif self.model_type == 'resnet':
-            pooled = self.model(x.transpose(1, 2))
-        elif self.model_type == 'tsai01':
-            pooled = self.model(x.transpose(1, 2))
+        to_cat = []
         
-        pooled = torch.cat((pooled, reasons_vec, age.view(-1, 1), age_vec, atrial_rate.view(-1, 1), atrial_rate_vec, ventricular_rate.view(-1, 1), ventricular_rate_vec), dim=1)
-        pooled = pooled.float()
-        output = self.MLPhead(pooled)
+        if not self.ignore_ecg:
+            if self.model_type == 'cdil':
+                model_out = self.model(x.transpose(1, 2)).transpose(1, 2)
+                pooled = torch.mean(model_out, dim=1)
+            elif self.model_type == 'resnet':
+                pooled = self.model(x.transpose(1, 2))
+            elif self.model_type == 'tsai01':
+                pooled = self.model(x.transpose(1, 2))
+                
+            to_cat.append(pooled)
+            # pooled = torch.cat((pooled, reasons_vec, age.view(-1, 1), age_vec, atrial_rate.view(-1, 1), atrial_rate_vec, ventricular_rate.view(-1, 1), ventricular_rate_vec), dim=1)
+        
+        if self.added_features:
+            to_cat.append(reasons_vec)
+            to_cat.append(age.view(-1, 1))
+            to_cat.append(atrial_rate.view(-1, 1))
+            to_cat.append(ventricular_rate.view(-1, 1))
+            
+        if self.added_features_onehot:
+            to_cat.append(age_vec)
+            to_cat.append(atrial_rate_vec)
+            to_cat.append(ventricular_rate_vec)
+            
+        concat = torch.cat(to_cat, dim=1)
+        concat = concat.float()
+        output = self.MLPhead(concat)
         return output
 
     def training_step(self, batch, batch_idx):

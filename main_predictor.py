@@ -27,7 +27,7 @@ def train_func(config, max_epochs, num_samples):
                            attn_dropout=config['dropout'], fc_dropout=config['dropout'],
                            n_layers=config['num_layers'])
 
-    model = Predictor(core, config['model'], config['output_channels'], lr=config['learning_rate'], wd=config['weight_decay'], dropout=config['dropout'])
+    model = Predictor(core, config)
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_accuracy',
@@ -40,7 +40,7 @@ def train_func(config, max_epochs, num_samples):
     early_stop_callback = EarlyStopping(
         monitor='val_accuracy',
         min_delta=0.00,
-        patience=10,
+        patience=30,
         verbose=False,
         mode='max'
     )
@@ -70,6 +70,9 @@ if __name__ == '__main__':
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0)
     parser.add_argument("--dropout", type=float, default=0.2)
+    parser.add_argument("--no-ecg", action="store_true")
+    parser.add_argument("--added-feats", action="store_true")
+    parser.add_argument("--af-onehot", action="store_true")
     
     args = parser.parse_args()
     
@@ -78,7 +81,7 @@ if __name__ == '__main__':
         num_samples = 500
         batch_size = 32
     else:
-        max_epochs = 100
+        max_epochs = 1000
         num_samples = 20000
         batch_size = args.batch_size
     
@@ -92,5 +95,8 @@ if __name__ == '__main__':
         "learning_rate": args.learning_rate,
         "weight_decay": args.weight_decay,
         "dropout": args.dropout,
+        "ignore_ecg": args.no_ecg,
+        "added_features": args.added_feats,
+        "added_features_onehot": args.af_onehot
     }
     train_func(search_space, max_epochs, num_samples)
