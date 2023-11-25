@@ -23,13 +23,13 @@
             "args": ["--smoke-test", "--model", "cdil"]
         },
         {
-            "name": "predictor cdil noecg",
+            "name": "predictor cdil",
             "type": "python",
             "request": "launch",
             "program": "main_predictor.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--model", "cdil", "--no-ecg"]
+            "args": ["--model", "cdil"]
         },
         {
             "name": "smoke test predictor resnet",

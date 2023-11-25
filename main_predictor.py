@@ -12,27 +12,13 @@ def train_func(config, max_epochs, num_samples):
     dm = ECGDataModule('datasets/hhmusedata', batch_size=config['batch_size'], mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE,
                        num_workers=7, sample_size=num_samples, train_fraction=0.8, dev_fraction=0.2, test_fraction=0.0)
     
-    if config['model'] == 'cdil':
-        core = CDIL(
-            input_channels=12,
-            hidden_channels=config['hidden_channels'],
-            output_channels=config['output_channels'],
-            num_layers=config['num_layers'],
-            kernel_size=config['kernel_size']
-        )
-    elif config['model'] == 'resnet':
-        core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'], dropout=config['dropout'])
-    elif config['model'] == 'tsai01':
-        core = TSPerceiver(c_in=12, c_out=config['output_channels'], seq_len=4096, 
-                           attn_dropout=config['dropout'], fc_dropout=config['dropout'],
-                           n_layers=config['num_layers'])
-
+    core = prepare_core(config)
     model = Predictor(core, config)
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_accuracy',
         dirpath='checkpoints/',
-        filename=str(config['model']) + '-{epoch:02d}-hc' + str(config['hidden_channels']) + '-nl' + str(config['num_layers']) + '-oc' + str(config['output_channels']) +'-{val_accuracy:.2f}',
+        filename=stringify_config(config) + '-{val_accuracy:.2f}',
         save_top_k=1,
         mode='max',
     )
@@ -54,6 +40,39 @@ def train_func(config, max_epochs, num_samples):
         logger=wandb_logger,
     )
     trainer.fit(model, datamodule=dm)
+    
+def stringify_config(config):
+    ret = ""
+    for key in config:
+        shortened_key = "".join(v[0] for v in key.split("_"))
+        value = config[key]
+        if type(value) == float:
+            value = round(value, 3)
+        if type(value) == bool:
+            if value:
+                value = "T"
+            else:  
+                value = "F"
+        ret += f"{shortened_key}{value}-"
+    return ret
+
+def prepare_core(config):
+    if config['model'] == 'cdil':
+        core = CDIL(
+            input_channels=12,
+            hidden_channels=config['hidden_channels'],
+            output_channels=config['output_channels'],
+            num_layers=config['num_layers'],
+            kernel_size=config['kernel_size']
+        )
+    elif config['model'] == 'resnet':
+        core = ResNet(normalize=True, propagate_normalization=False, embedding_size=config['output_channels'], dropout=config['dropout'])
+    elif config['model'] == 'tsai01':
+        core = TSPerceiver(c_in=12, c_out=config['output_channels'], seq_len=4096, 
+                           attn_dropout=config['dropout'], fc_dropout=config['dropout'],
+                           n_layers=config['num_layers'])
+                           
+    return core
 
 if __name__ == '__main__':    
     # setup argparse to load smoke test boolean flag
@@ -61,7 +80,7 @@ if __name__ == '__main__':
     parser.add_argument("--smoke-test", action="store_true")
     
     # add search_space parameters
-    parser.add_argument("--model", type=str, required=True, choices=['cdil', 'resnet', 'tsai01'], help='model to use')
+    parser.add_argument("--model", type=str, default='cdil', choices=['cdil', 'resnet', 'tsai01'], help='model to use')
     parser.add_argument("--hidden_channels", type=int, default=64)
     parser.add_argument("--output_channels", type=int, default=64)
     parser.add_argument("--num_layers", type=int, default=12)
@@ -70,9 +89,11 @@ if __name__ == '__main__':
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0)
     parser.add_argument("--dropout", type=float, default=0.2)
-    parser.add_argument("--no-ecg", action="store_true")
-    parser.add_argument("--added-feats", action="store_true")
-    parser.add_argument("--af-onehot", action="store_true")
+    parser.add_argument("--no_ecg", action="store_true")
+    parser.add_argument("--added_feats", action="store_true")
+    parser.add_argument("--af_onehot", action="store_true")
+    
+    parser.add_argument("--checkpoint", type=str, default=None)
     
     args = parser.parse_args()
     
@@ -84,7 +105,7 @@ if __name__ == '__main__':
         max_epochs = 1000
         num_samples = 20000
         batch_size = args.batch_size
-    
+        
     search_space = {
         "model": args.model, # "cdil" or "resnet
         "hidden_channels": args.hidden_channels,
@@ -99,4 +120,33 @@ if __name__ == '__main__':
         "added_features": args.added_feats,
         "added_features_onehot": args.af_onehot
     }
-    train_func(search_space, max_epochs, num_samples)
+
+    if args.checkpoint is not None:
+        core = prepare_core(search_space)
+        
+        model = Predictor.load_from_checkpoint(args.checkpoint, model=core, config=search_space)
+        model.eval()
+        model.freeze()
+        model.to('cuda')
+        
+        dm = ECGDataModule('datasets/hhmusedata', batch_size=50, mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE,
+                       num_workers=7, sample_size=1000, train_fraction=0.8, dev_fraction=0.2, test_fraction=0.0)
+        
+        val_dataloader = dm.val_dataloader()
+        for batch in val_dataloader:
+            x, y = batch
+            x = x.to('cuda')
+            y = y.to('cuda')
+            
+            y_hat = model(x)
+            y_hat = y_hat.argmax(dim=1)
+            
+            print(y)
+            print(y_hat)
+            print((y == y_hat).sum())
+            print(y.shape)
+            print(y_hat.shape)
+            break
+        
+    else:
+        train_func(search_space, max_epochs, num_samples)
