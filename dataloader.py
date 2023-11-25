@@ -178,7 +178,7 @@ class MultiFileHDF5ECGHandle:
 
     def __getitem_handle_index_list(self, columns, index):
         for el in index:
-            if not isinstance(el, int):
+            if not isinstance(el, int) and not isinstance(el, np.integer):
                 raise ValueError(f"One of the indices you've used in the list, {el}, is not an integer.")
         index_array = np.array(index, dtype=int)
         tensors = self.__getitem_handle_index_array_main(columns, index_array)
@@ -414,6 +414,7 @@ class HDF5ECGDataset(data.IterableDataset):
     HH_CLASS_A_COL_NAME = 'DischargeTo_Agg'
     HH_CLASS_B_COL_NAME = 'DischargeTo_unit_agg'
     HH_CLASS_COL_NAME = 'hh_class'
+    HH_VISIT_REASON_COL_NAME = 'VisitReason'
 
     class Mode(IntEnum):
         MODE_DEFAULT: int = 0
@@ -501,11 +502,12 @@ class HDF5ECGDataset(data.IterableDataset):
         for start_idx in range(start_index, end_index, chunk_size):
             chunk_of_exam_ids = self.handle[start_idx:min(start_idx + chunk_size, end_index), self.EXAM_ID_COL_NAME]
             corresponding_hh_classes = self.handle.metadata_df.loc[chunk_of_exam_ids][self.HH_CLASS_COL_NAME]
-            for position, hh_class in zip(range(start_idx, start_idx + chunk_size), corresponding_hh_classes):
+            corresponding_visit_reasons = self.handle.metadata_df.loc[chunk_of_exam_ids][self.HH_VISIT_REASON_COL_NAME]
+            for position, hh_class, reason in zip(range(start_idx, start_idx + chunk_size), corresponding_hh_classes, corresponding_visit_reasons):
                 if hh_class not in ret:
-                    ret[hh_class] = [position]
+                    ret[hh_class] = [(position, reason)]
                 else:
-                    ret[hh_class].append(position)
+                    ret[hh_class].append((position, reason))
         return ret
 
     def __len__(self):
@@ -558,42 +560,45 @@ class HDF5ECGDataset(data.IterableDataset):
 
         if iterator is None:
             raise ValueError(f"Unknown mode {self.mode}.")
-
-        def apply_transform(batch_element):
-            is_tuple = isinstance(batch_element, tuple)
-
-            y_is_ecg = False
-            if is_tuple:
-                x, y = batch_element
-                if y.shape == x.shape:
-                    y_is_ecg = True
-            else:
-                x = batch_element
-
+        
+        def apply_transform_ecg(ecg):
             if self.transform:
-                x = self.transform(x)
-                if y_is_ecg:
-                    y = self.transform(y)
+                ecg = self.transform(ecg)
             else:
-                x = torch.from_numpy(x)
-                if y_is_ecg:
-                    y = torch.from_numpy(y)
-
+                ecg = torch.from_numpy(ecg)
+            
             if self.clip_length is not None:
-                x = x[..., :self.clip_length, :]
+                ecg = ecg[..., :self.clip_length, :]
 
             if self.shuffle_leads:
-                idx = torch.randperm(x.shape[-2])
-                x = x[..., idx, :]
+                idx = torch.randperm(ecg.shape[-2])
+                ecg = ecg[..., idx, :]
 
             if self.add_small_noise:
-                x = x + torch.normal(0, 0.3, size=x.shape, device=x.device)
+                ecg = ecg + torch.normal(0, 0.3, size=ecg.shape, device=ecg.device)
+                
+            return ecg
 
-            if is_tuple:
+        def apply_transform(batch_element):
+            if isinstance(batch_element, tuple):
+                x, y = batch_element
+                if isinstance(x, dict):
+                    orig_shape = x['ecg'].shape
+                    x['ecg'] = apply_transform_ecg(x['ecg'])
+                else:
+                    orig_shape = x.shape
+                    x = apply_transform_ecg(x)
+                    
+                if y.shape == orig_shape:
+                    y = apply_transform_ecg(y)
                 return x, y
             else:
+                if isinstance(x, dict):
+                    x['ecg'] = apply_transform_ecg(x['ecg'])
+                else:
+                    x = apply_transform_ecg(x)
                 return x
-
+                
         return map(apply_transform, iterator)
 
     def __generator_default_shuffle_batches(self, size):
@@ -814,13 +819,15 @@ class HDF5ECGDataset(data.IterableDataset):
             # Initialize empty lists to hold the batch data and labels
             batch = []
             labels = []
+            reasons = []
 
             # Sample equally from each class
             for class_label, class_indices in self.hh_class_index.items():
                 if class_label in forbidden_classes:
                     continue
                 # Randomly choose samples from this class
-                chosen_indices = self.prng.choice(class_indices, samples_per_class)
+                chosen_indices, visit_reasons = zip(*self.prng.choice(class_indices, samples_per_class))
+                chosen_indices = list(chosen_indices)
                 
                 # Add the chosen samples to the batch
                 batch.extend(self.handle[chosen_indices])
@@ -829,6 +836,7 @@ class HDF5ECGDataset(data.IterableDataset):
                     class_label -= 1
                 # Add the corresponding labels to the labels list
                 labels.extend([class_label] * samples_per_class)
+                reasons.extend(visit_reasons)
 
             # If the batch size is not a multiple of the number of classes, 
             # randomly choose extra samples from all classes to fill the batch
@@ -844,20 +852,23 @@ class HDF5ECGDataset(data.IterableDataset):
                     class_indices = self.hh_class_index[class_label]
                     
                     # Randomly choose samples from this class
-                    chosen_index = self.prng.choice(class_indices, 1)
-                    
+                    chosen_indices, visit_reasons = zip(*self.prng.choice(class_indices, 1))
+                    chosen_indices = list(chosen_indices)
+
                     # Add the chosen samples to the batch
-                    batch.extend(self.handle[chosen_index])
+                    batch.extend(self.handle[chosen_indices])
                     
                     if class_label > forbidden_classes[0]:
                         class_label -= 1
                     # Add the corresponding labels to the labels list
-                    labels.append(class_label)
+                    labels.extend([class_label] * 1)
+                    reasons.extend(visit_reasons)
             
             batch = np.array(batch)
             labels = np.array(labels)
+            reasons = np.array(reasons)
             
-            yield batch, labels
+            yield {'ecg': batch, 'reasons': reasons}, labels
 
 
 class ECGDataModule(LightningDataModule):
@@ -978,11 +989,23 @@ class ECGDataModule(LightningDataModule):
     
 if __name__ == '__main__':
     dh = ECGDataModule('datasets/hhmusedata', batch_size=32, mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE,
-                       train_fraction=1.0,
-                       dev_fraction=0.0,
-                       test_fraction=0.0,)
-    dl = dh.train_dataloader()
-    for i, (x, y) in enumerate(dl):
-        print(x.shape, y.shape)
-        if i == 10:
-            break
+                       train_fraction=0.7,
+                       dev_fraction=0.1,
+                       test_fraction=0.2,)
+    num_train_batches = len(dh.train_dataloader())
+    num_dev_batches = len(dh.val_dataloader())
+    
+    train_class_counts = np.zeros(5)
+    dev_class_counts = np.zeros(5)
+    for batch in tqdm(dh.train_dataloader(), desc='Counting classes'):
+        _, y = batch
+        train_class_counts += np.bincount(y, minlength=5)
+    for batch in tqdm(dh.val_dataloader(), desc='Counting classes'):
+        _, y = batch
+        dev_class_counts += np.bincount(y, minlength=5)
+    
+    print(f"Train batches: {num_train_batches}")
+    print(f"Dev batches: {num_dev_batches}")
+    print(f"Train class counts: {train_class_counts}")
+    print(f"Dev class counts: {dev_class_counts}")
+    

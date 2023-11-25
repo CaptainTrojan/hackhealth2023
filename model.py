@@ -10,6 +10,7 @@ from torch.nn.utils.weight_norm import weight_norm
 from tqdm import tqdm
 import pytorch_lightning as pl
 import torchmetrics
+from torch.nn.functional import one_hot
 
 
 class DeformableConv2d(nn.Module):
@@ -173,7 +174,7 @@ class Predictor(pl.LightningModule):
         self.model = model
         self.MLPhead = nn.Sequential(
             nn.Dropout(dropout),
-            nn.Linear(channels, channels//2),
+            nn.Linear(channels + 10, channels//2),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(channels//2, channels//4),
@@ -185,7 +186,11 @@ class Predictor(pl.LightningModule):
         self.lr = lr
         self.wd = wd
 
-    def forward(self, x):
+    def forward(self, batch):
+        reasons = batch['reasons']
+        x = batch['ecg']
+        reasons_vec = one_hot(reasons, num_classes=10)
+        
         if self.model_type == 'cdil':
             model_out = self.model(x.transpose(1, 2)).transpose(1, 2)
             pooled = torch.mean(model_out, dim=1)
@@ -193,6 +198,9 @@ class Predictor(pl.LightningModule):
             pooled = self.model(x.transpose(1, 2))
         elif self.model_type == 'tsai01':
             pooled = self.model(x.transpose(1, 2))
+        
+        pooled = torch.cat((pooled, reasons_vec), dim=1)
+        
         output = self.MLPhead(pooled)
         return output
 
