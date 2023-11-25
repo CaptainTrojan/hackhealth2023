@@ -502,12 +502,12 @@ class HDF5ECGDataset(data.IterableDataset):
         for start_idx in range(start_index, end_index, chunk_size):
             chunk_of_exam_ids = self.handle[start_idx:min(start_idx + chunk_size, end_index), self.EXAM_ID_COL_NAME]
             corresponding_hh_classes = self.handle.metadata_df.loc[chunk_of_exam_ids][self.HH_CLASS_COL_NAME]
-            corresponding_visit_reasons = self.handle.metadata_df.loc[chunk_of_exam_ids][self.HH_VISIT_REASON_COL_NAME]
-            for position, hh_class, reason in zip(range(start_idx, start_idx + chunk_size), corresponding_hh_classes, corresponding_visit_reasons):
+            # corresponding_visit_reasons = self.handle.metadata_df.loc[chunk_of_exam_ids][self.HH_VISIT_REASON_COL_NAME]
+            for position, hh_class, exam_id in zip(range(start_idx, start_idx + chunk_size), corresponding_hh_classes, chunk_of_exam_ids):
                 if hh_class not in ret:
-                    ret[hh_class] = [(position, reason)]
+                    ret[hh_class] = [(position, exam_id)]
                 else:
-                    ret[hh_class].append((position, reason))
+                    ret[hh_class].append((position, exam_id))
         return ret
 
     def __len__(self):
@@ -819,14 +819,17 @@ class HDF5ECGDataset(data.IterableDataset):
             # Initialize empty lists to hold the batch data and labels
             batch = []
             labels = []
-            reasons = []
+            visit_reasons = []
+            ventricular_rates = []
+            atrial_rates = []
+            ages = []
 
             # Sample equally from each class
             for class_label, class_indices in self.hh_class_index.items():
                 if class_label in forbidden_classes:
                     continue
                 # Randomly choose samples from this class
-                chosen_indices, visit_reasons = zip(*self.prng.choice(class_indices, samples_per_class))
+                chosen_indices, exam_ids = zip(*self.prng.choice(class_indices, samples_per_class))
                 chosen_indices = list(chosen_indices)
                 
                 # Add the chosen samples to the batch
@@ -836,7 +839,17 @@ class HDF5ECGDataset(data.IterableDataset):
                     class_label -= 1
                 # Add the corresponding labels to the labels list
                 labels.extend([class_label] * samples_per_class)
-                reasons.extend(visit_reasons)
+                
+                metadata = self.handle.metadata_df.loc[exam_ids, ('VisitReason', 'ventricular_rate', 'atrial_rate', 'age')]
+                b_reason = metadata['VisitReason']
+                b_ventricular_rate = metadata['ventricular_rate']
+                b_atrial_rate = metadata['atrial_rate']
+                b_age = metadata['age']
+                
+                visit_reasons.extend(b_reason)
+                ventricular_rates.extend(b_ventricular_rate)
+                atrial_rates.extend(b_atrial_rate)
+                ages.extend(b_age)
 
             # If the batch size is not a multiple of the number of classes, 
             # randomly choose extra samples from all classes to fill the batch
@@ -851,24 +864,42 @@ class HDF5ECGDataset(data.IterableDataset):
                 for class_label in chosen_classes:
                     class_indices = self.hh_class_index[class_label]
                     
-                    # Randomly choose samples from this class
-                    chosen_indices, visit_reasons = zip(*self.prng.choice(class_indices, 1))
+                    chosen_indices, exam_ids = zip(*self.prng.choice(class_indices, samples_per_class))
                     chosen_indices = list(chosen_indices)
-
+                    
                     # Add the chosen samples to the batch
                     batch.extend(self.handle[chosen_indices])
                     
                     if class_label > forbidden_classes[0]:
                         class_label -= 1
                     # Add the corresponding labels to the labels list
-                    labels.extend([class_label] * 1)
-                    reasons.extend(visit_reasons)
+                    labels.extend([class_label] * samples_per_class)
+                    
+                    metadata = self.handle.metadata_df.loc[exam_ids, ('VisitReason', 'ventricular_rate', 'atrial_rate', 'age')]
+                    b_reason = metadata['VisitReason']
+                    b_ventricular_rate = metadata['ventricular_rate']
+                    b_atrial_rate = metadata['atrial_rate']
+                    b_age = metadata['age']
+                    
+                    visit_reasons.extend(b_reason)
+                    ventricular_rates.extend(b_ventricular_rate)
+                    atrial_rates.extend(b_atrial_rate)
+                    ages.extend(b_age)
             
             batch = np.array(batch)
             labels = np.array(labels)
-            reasons = np.array(reasons)
+            visit_reasons = np.array(visit_reasons)
+            ventricular_rates = np.array(ventricular_rates)
+            atrial_rates = np.array(atrial_rates)
+            ages = np.array(ages)
             
-            yield {'ecg': batch, 'reasons': reasons}, labels
+            yield {
+                'ecg': batch,
+                'visit_reasons': visit_reasons,
+                'ventricular_rates': ventricular_rates,
+                'atrial_rates': atrial_rates,
+                'ages': ages
+            }, labels
 
 
 class ECGDataModule(LightningDataModule):
