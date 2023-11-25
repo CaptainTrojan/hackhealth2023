@@ -10,7 +10,7 @@ from tsai.models.TSPerceiver import TSPerceiver
 
 def train_func(config, max_epochs, num_samples):
     dm = ECGDataModule('datasets/hhmusedata', batch_size=config['batch_size'], mode=HDF5ECGDataset.Mode.MODE_HH_CLASSIFIER_SIMPLE,
-                       num_workers=7, sample_size=num_samples)
+                       num_workers=7, sample_size=num_samples, train_fraction=0.8, dev_fraction=0.2, test_fraction=0.0)
     
     if config['model'] == 'cdil':
         core = CDIL(
