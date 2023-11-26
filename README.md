@@ -16,25 +16,28 @@ This step involves using a pre-trained deep learning model to predict specific h
 ## Hospitalization decision: 
 This step involves using a pre-loaded gradient boosting classifier to make a final decision on whether the patient should be sent home or to a cardiology clinic based on the ECG condition predictions. The classifier is a XGBoost model that was trained on a subset of the data using the main_autoencoder.py script, which uses the resnet_model.py module. The classifier is loaded using the joblib.load function from the joblib module. The classifier takes as input a vector of ECG condition predictions, and outputs a binary label indicating the hospitalization decision. The decisions are made using the predict.py script, which uses the gbc.pkl file. The output of this step is a CSV file containing the hospitalization decisions for each patient.
 
-# Requirements
-The project requires the following Python packages:
+# Usage
+First, clone the repository and install required packages:
+
 ```
-h5py==3.10.0
-joblib==1.3.2
-matplotlib==3.8.2
-numpy==1.26.2
-pandas==2.1.3
-ptwt==0.1.7
-pytorch_lightning==2.1.2
-tensorflow==2.15.0
-torch==2.1.1
-torchmetrics==1.2.0
-torchvision==0.16.1
-tqdm==4.65.0
-tsai==0.3.8
-xmltodict==0.13.0
-```
-The requirements can be installed using the requirements.txt file:
-```
+git clone https://github.com/CaptainTrojan/hackhealth2023.git
+cd hackhealth2023
 pip install -r requirements.txt
+```
+
+Run prediction:
+```
+python predict.py
+```
+
+The required arguments are ECG muse file location, patient's age, and patient's visit reason
+```
+predict.py [-h] --ecg ECG --age AGE --visit_reason {1,2,3,4,9}
+
+options:
+  -h, --help            show this help message and exit
+  --ecg ECG             Path to MUSE XML ECG
+  --age AGE             Patient age
+  --visit_reason {1,2,3,4,9}
+                        Patient visit reason: 1: bolest na hrudi, 2: dušnost, 3: palpitace, 4: bezvědomí, 9: jiný důvod
 ```
