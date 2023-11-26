@@ -55,3 +55,9 @@ options:
   --visit_reason {1,2,3,4,9}
                         Patient visit reason: 1: bolest na hrudi, 2: dušnost, 3: palpitace, 4: bezvědomí, 9: jiný důvod
 ```
+
+Example:
+
+```
+python predict.py --ecg MUSE_20151123_100770_15000.xml --age 53 --visit_reason 2
+```
