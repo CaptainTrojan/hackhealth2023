@@ -8,7 +8,7 @@ The data consists of ECG recordings and patient information from a large-scale s
 The methodology consists of two main steps:
 
 ## ECG feature extraction: 
-This step involves parsing the ECG data and extracting various potential diagnoses using a [pre-trained model](https://github.com/antonior92/automatic-ecg-diagnosis). These features are computed using the compute_ecg_features.py script, which uses the PatientEKGFile class from the libs folder. The model is a convolutional neural network (CNN) that was trained on a large dataset of ECG signals and labels from the PhysioNet Computing in Cardiology Challenge 2020. The output of this step is a CSV file containing the ECG condition predictions for each patient. 
+This step involves parsing the ECG data and extracting various potential diagnoses using a [pre-trained deep-learning model](https://github.com/antonior92/automatic-ecg-diagnosis). These features are computed using the compute_ecg_features.py script, which uses the PatientEKGFile class from the libs folder. The model is a 1D residual convolutional neural network that was trained on a large dataset of ECG signals and labels from the PhysioNet Computing in Cardiology Challenge 2020. The output of this step is a CSV file containing the ECG condition predictions for each patient. 
 
 ## Hospitalization decision: 
 In the second step, we merge the condition predictions with more features that can be gathered about the patient (age, ventricular/atrial rate, visit reason) and train a gradient boosting classifier to make a final decision on whether the patient should be sent home or to a cardiology clinic.
