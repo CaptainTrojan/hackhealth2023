@@ -50,6 +50,15 @@
             "args": ["--smoke-test", "--model", "tsai01"]
         },
         {
+            "name": "try predict",
+            "type": "python",
+            "request": "launch",
+            "program": "predict.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": ["--ecg", "datasets/MUSE_20231123_100739_11000.xml", "--age", "1", "--visit_reason", "1"]
+        },
+        {
             "name": "debug current file",
             "type": "python",
             "request": "launch",
