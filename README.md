@@ -17,14 +17,17 @@ In the second step, we merge the condition predictions with more features that c
 
 # Feature importance
 This plot shows the relative importance of each feature used by the gradient boosting classifier to make the hospitalization decisions. The higher the value, the more influential the feature is in determining the outcome. 
+
 ![importance](images/featimport.png)
 
 # Precision-Recall curve
 This plot shows the trade-off between precision and recall for different thresholds of the classifier. Precision is the fraction of positive predictions that are correct, while recall is the fraction of positive cases that are detected. The plot also shows the average precision (AP) score, which is the area under the precision-recall curve. 
+
 ![pr](images/pr.png)
 
 # AUROC curve
 This plot shows the receiver operating characteristic (ROC) curve of the classifier. The ROC curve plots the true positive rate (TPR) against the false positive rate (FPR) for different thresholds of the classifier. The TPR is the same as recall, while the FPR is the fraction of negative cases that are incorrectly predicted as positive.
+
 ![auc](images/auroc.png)
 
 # Usage
