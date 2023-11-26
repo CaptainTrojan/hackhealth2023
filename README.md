@@ -4,6 +4,8 @@ This project aims to develop a system for predicting hospitalization outcomes ba
 # Data
 The data consists of ECG recordings and patient information from a large-scale study of cardiac patients in the Czech Republic. The ECG data is stored in HDF5 files, each containing a single patient’s ECG signal and metadata. The patient information is stored in a CSV file, containing demographic and clinical variables for each patient. The hospitalization records are stored in a XML file, containing the admission and discharge dates, diagnoses, and procedures for each patient.
 
+![distribution](images/classdistribution.png)
+
 # Methodology
 The methodology consists of two main steps:
 
@@ -12,6 +14,18 @@ This step involves parsing the ECG data and extracting various potential diagnos
 
 ## Hospitalization decision: 
 In the second step, we merge the condition predictions with more features that can be gathered about the patient (age, ventricular/atrial rate, visit reason) and train a gradient boosting classifier to make a final decision on whether the patient should be sent home or to a cardiology clinic.
+
+# Feature importance
+This plot shows the relative importance of each feature used by the gradient boosting classifier to make the hospitalization decisions. The higher the value, the more influential the feature is in determining the outcome. 
+![importance](images/featimport.png)
+
+# Precision-Recall curve
+This plot shows the trade-off between precision and recall for different thresholds of the classifier. Precision is the fraction of positive predictions that are correct, while recall is the fraction of positive cases that are detected. The plot also shows the average precision (AP) score, which is the area under the precision-recall curve. 
+![pr](images/pr.png)
+
+# AUROC curve
+This plot shows the receiver operating characteristic (ROC) curve of the classifier. The ROC curve plots the true positive rate (TPR) against the false positive rate (FPR) for different thresholds of the classifier. The TPR is the same as recall, while the FPR is the fraction of negative cases that are incorrectly predicted as positive.
+![auc](images/auroc.png)
 
 # Usage
 First, clone the repository and install required packages:
