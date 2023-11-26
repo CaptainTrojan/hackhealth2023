@@ -21,12 +21,12 @@ This plot shows the relative importance of each feature used by the gradient boo
 ![importance](images/featimport.png)
 
 # Precision-Recall curve
-This plot shows the trade-off between precision and recall for different thresholds of the classifier. Precision is the fraction of positive predictions that are correct, while recall is the fraction of positive cases that are detected. The plot also shows the average precision (AP) score, which is the area under the precision-recall curve. 
+This plot shows how good the classifier is at finding the patients who need to go to the cardiology clinic (positive class) and avoiding the ones who can go home (negative class). Precision is the percentage of patients who are correctly sent to the cardiology clinic out of all the patients who are sent there. Recall is the percentage of patients who are correctly sent to the cardiology clinic out of all the patients who need to go there. The plot shows how these two percentages change when the classifier becomes more or less strict about its decisions. The average precision (AP) score is a number that summarizes how well the classifier does overall. The higher the AP score, the better the classifier is at determining the right discharge for patients.
 
 ![pr](images/pr.png)
 
 # AUROC curve
-This plot shows the receiver operating characteristic (ROC) curve of the classifier. The ROC curve plots the true positive rate (TPR) against the false positive rate (FPR) for different thresholds of the classifier. The TPR is the same as recall, while the FPR is the fraction of negative cases that are incorrectly predicted as positive.
+This plot shows how good the classifier is at separating the patients who need to go to the cardiology clinic (positive class) from the ones who can go home (negative class). The plot shows how often the classifier is right (true positive rate) and how often it is wrong (false positive rate) when it makes different decisions. The true positive rate is the same as recall, while the false positive rate is the percentage of patients who are wrongly sent to the cardiology clinic out of all the patients who can go home. The plot also shows the area under the curve (AUROC) score, which is a number that measures how well the classifier can tell the difference between the two classes. The higher the AUROC score, the better the classifier is at separating the patients.
 
 ![auc](images/auroc.png)
 
