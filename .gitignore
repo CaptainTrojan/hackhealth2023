@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 *.xml
 checkpoints/
+ribeiro_model/

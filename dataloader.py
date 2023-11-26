@@ -426,6 +426,7 @@ class HDF5ECGDataset(data.IterableDataset):
         MODE_GALLERY_PROBE: int = 6
         MODE_MASKED_AUTOENCODER: int = 7
         MODE_HH_CLASSIFIER_SIMPLE: int = 8
+        MODE_ECG_WITH_EXAM_ID: int = 9
 
         @classmethod
         def __contains__(cls, item):
@@ -557,6 +558,9 @@ class HDF5ECGDataset(data.IterableDataset):
             iterator = self.__generator_masked_autoencoder(size)
         elif self.mode == self.Mode.MODE_HH_CLASSIFIER_SIMPLE:
             iterator = self.__generator_hh_classifier_simple(size)
+        elif self.mode == self.Mode.MODE_ECG_WITH_EXAM_ID:
+            assert worker_info is None, "Mode 'ecg_with_exam_id' doesn't support multi-worker loading."
+            iterator = self.__generator_ecg_with_exam_id(size)
 
         if iterator is None:
             raise ValueError(f"Unknown mode {self.mode}.")
@@ -593,6 +597,7 @@ class HDF5ECGDataset(data.IterableDataset):
                     y = apply_transform_ecg(y)
                 return x, y
             else:
+                x = batch_element
                 if isinstance(x, dict):
                     x['ecg'] = apply_transform_ecg(x['ecg'])
                 else:
@@ -900,6 +905,16 @@ class HDF5ECGDataset(data.IterableDataset):
                 'atrial_rates': atrial_rates,
                 'ages': ages
             }, labels
+    
+    def __generator_ecg_with_exam_id(self, size):
+        num_individual_samples = len(self.handle) - self.batch_size
+        start_index = int(self.start_fraction * num_individual_samples)
+        end_index = int(self.end_fraction * num_individual_samples)
+        for i in range(start_index, end_index, self.batch_size):
+            tracings, exam_ids = self.handle[i:i + self.batch_size, self.TRACINGS_COL_NAME, self.EXAM_ID_COL_NAME]
+
+            yield {'ecg': tracings, 'exam_ids': exam_ids}
+    
 
 
 class ECGDataModule(LightningDataModule):
