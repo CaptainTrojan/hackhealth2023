@@ -9,11 +9,16 @@ The data consists of ECG recordings and patient information from a large-scale s
 # Methodology
 The methodology consists of two main steps:
 
-## ECG feature extraction: 
-This step involves parsing the ECG data and extracting various potential diagnoses using a [pre-trained deep-learning model](https://github.com/antonior92/automatic-ecg-diagnosis). These features are computed using the compute_ecg_features.py script, which uses the PatientEKGFile class from the libs folder. The model is a 1D residual convolutional neural network that was trained on a large dataset of ECG signals and labels from the PhysioNet Computing in Cardiology Challenge 2020. The output of this step is a CSV file containing the ECG condition predictions for each patient. 
+## 1. ECG feature extraction: 
+This step involves parsing the ECG data and extracting various potential diagnoses using a [pre-trained deep-learning model](https://github.com/antonior92/automatic-ecg-diagnosis). First, the ECG (and additional features) are extracted from the MUSE XML file using the PatientEKGFile class from the libs folder. The model itself a 1D residual convolutional neural network that was trained on a large dataset of ECG signals and labels from the PhysioNet Computing in Cardiology Challenge 2020. The output of this step are probabilities of various ECG condition predictions for the given ECG file.
 
-## Hospitalization decision: 
-In the second step, we merge the condition predictions with more features that can be gathered about the patient (age, ventricular/atrial rate, visit reason) and train a gradient boosting classifier to make a final decision on whether the patient should be sent home or to a cardiology clinic.
+The conditions the model is able to detect are 1st degree AV block(1dAVb), right bundle branch block (RBBB), left bundle branch block (LBBB), sinus bradycardia (SB), atrial fibrillation (AF), sinus tachycardia (ST). The abnormalities are not mutually exclusive, so the probabilities do not necessarily sum to one.
+
+![errors](https://camo.githubusercontent.com/82fe7bb33a21311b640828e839aa8030a155143a93d4adf9ed4fd67f736b4a51/68747470733a2f2f6d656469612e737072696e6765726e61747572652e636f6d2f66756c6c2f737072696e6765722d7374617469632f696d6167652f61727425334131302e313033382532467334313436372d3032302d31353433322d342f4d656469614f626a656374732f34313436375f323032305f31353433325f466967315f48544d4c2e706e673f61733d77656270)
+
+## 2. Hospitalization decision: 
+
+In the second step, we merge the condition predictions with more features that can be gathered about the patient (age, ventricular/atrial rate, visit reason) and train a gradient boosting classifier to make a final decision on whether the patient should be sent home or to a cardiology clinic. A GradientBoostingClassifier from scikit-learn is a machine learning algorithm that can be used for classification problems, such as predicting whether a patient needs to go to a cardiology clinic or not. It works by combining many simple decision trees, each of which tries to correct the errors of the previous ones, to create a more accurate and robust model. 
 
 # Feature importance
 This plot shows the relative importance of each feature used by the gradient boosting classifier to make the hospitalization decisions. The higher the value, the more influential the feature is in determining the outcome. 
